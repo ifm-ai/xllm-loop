@@ -1,0 +1,13 @@
+{
+  "tokenizer": {
+    "type": "huggingface",
+    "path": "/absolute/path/to/part1-tokenizer"
+  },
+  "data": "/absolute/path/to/nltk-web-high-randomized:0.0400:text:text,/absolute/path/to/nemotron-cc-high:0.0300:text:text,/absolute/path/to/nemotron-cc-high-synthetic:0.0500:text:text,/absolute/path/to/web-high-medium:0.0430:text:text,/absolute/path/to/nemotron-cc-high-medium:0.0200:text:text,/absolute/path/to/nemotron-cc-high-medium-synthetic:0.0300:text:text,/absolute/path/to/nemotron-cc-2025:0.0300:text:text,/absolute/path/to/nemotron-cc-diverse-qa:0.0300:text:text,/absolute/path/to/txt360-qa:0.0300:text:text,/absolute/path/to/opencoder:0.0800:text:text,/absolute/path/to/nemotron-pretraining-code:0.0300:text:text,/absolute/path/to/nemotron-cc-code:0.0190:text:text,/absolute/path/to/stack-edu:0.0050:text:text,/absolute/path/to/code_solutions_no_reasoning_8k:0.0350:text:text,/absolute/path/to/code_solutions_no_reasoning_8k-hard:0.0270:text:text,/absolute/path/to/code_solutions_with_reasoning_16k:0.0185:text:text,/absolute/path/to/code_solutions_with_reasoning_16k-hard:0.0115:text:text,/absolute/path/to/code_thinking-cleaned:0.0200:text:text,/absolute/path/to/code_prompts_all_knobs_8k:0.0050:text:text,/absolute/path/to/nemotron-cc-math:0.0120:text:text,/absolute/path/to/math-qwen-no-think:0.0400:text:text,/absolute/path/to/math-oss-cleaned:0.0500:text:text,/absolute/path/to/math-rewrite:0.0260:text:text,/absolute/path/to/math-dialogue:0.0100:text:text,/absolute/path/to/agentic-math-dialogue-cleaned:0.0050:text:text,/absolute/path/to/nemotron-sft-no-think:0.0175:text:text,/absolute/path/to/instruction_following-cleaned:0.0040:text:text,/absolute/path/to/nemotron-pretraining-sft:0.0220:text:text,/absolute/path/to/3efforts-pretrain:0.0050:text:text,/absolute/path/to/reasoning:0.0525:text:text,/absolute/path/to/general:0.0300:text:text,/absolute/path/to/planning:0.0410:text:text,/absolute/path/to/ai:0.0155:text:text,/absolute/path/to/games-8k:0.0070:text:text,/absolute/path/to/other:0.0180:text:text,/absolute/path/to/hq-rewrite:0.0200:text:text,/absolute/path/to/codeio:0.0015:text:text,/absolute/path/to/arabic-shuffled:0.0220:text:text,/absolute/path/to/french:0.0150:text:text,/absolute/path/to/hindi:0.0040:text:text,/absolute/path/to/diverse-qa-multilingual:0.0140:text:text,/absolute/path/to/other-multilingual:0.0140:text:text",
+  "dataloader": {
+    "buffer_size": 512,
+    "packing_type": "bestfit"
+  },
+  "eval_freq": -1,
+  "log_wandb": false
+}

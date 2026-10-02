@@ -1,5 +1,6 @@
 import math
-from typing import List, Dict, Any, Tuple
+import random
+from typing import List, Dict, Any, Optional, Tuple
 from timeit import default_timer as timer
 from dataclasses import dataclass
 from logging import getLogger
@@ -76,6 +77,7 @@ class State:
     scale: float
     scale_updates: int
     clip_cumulative: int
+    train_tflops: float = 0.0  # cumulative training TFLOPs of completed steps
 
 
 def manual_seed(cfg: TrainerConf):
@@ -138,14 +140,107 @@ def initialize_run(cfg: TrainerConf):
 
 
 def set_batch_size(cfg: TrainerConf):
+    accumulation = cfg.gradient_accumulation_steps
     if cfg.global_batch_size is None:
         assert cfg.batch_size is not None
-        cfg.global_batch_size = cfg.data_parallel_size * cfg.batch_size
+        cfg.global_batch_size = cfg.data_parallel_size * cfg.batch_size * accumulation
     else:
         assert cfg.batch_size is None
-        assert cfg.global_batch_size % cfg.data_parallel_size == 0, \
-            f"global batch size ({cfg.global_batch_size}) is not divisible by data parallel size ({cfg.data_parallel_size})."
-        cfg.batch_size = cfg.global_batch_size // cfg.data_parallel_size
+        assert cfg.global_batch_size % (cfg.data_parallel_size * accumulation) == 0, \
+            f"global batch size ({cfg.global_batch_size}) is not divisible by data parallel size ({cfg.data_parallel_size}) " \
+            f"x gradient accumulation steps ({accumulation})."
+        cfg.batch_size = cfg.global_batch_size // (cfg.data_parallel_size * accumulation)
+
+
+def capture_rng_state(data_parallel_size: int) -> Dict[str, Any]:
+    return {
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+        "torch": torch.get_rng_state(),
+        "cuda": torch.cuda.get_rng_state_all(),
+        "data_parallel_size": data_parallel_size,
+    }
+
+
+def load_rng_state(rng_state: Optional[Dict[str, Any]], data_parallel_size: int):
+    if rng_state is None:
+        logger.warning("Training state has no RNG state; not restoring RNG.")
+        return
+    if rng_state["data_parallel_size"] != data_parallel_size:
+        # Per-rank RNG states do not map onto a different data parallel world.
+        logger.warning(
+            f"Not restoring RNG state: data parallel size changed "
+            f"({rng_state['data_parallel_size']} -> {data_parallel_size})."
+        )
+        return
+    random.setstate(rng_state["python"])
+    np.random.set_state(rng_state["numpy"])
+    torch.set_rng_state(rng_state["torch"])
+    torch.cuda.set_rng_state_all(rng_state["cuda"])
+    logger.info("Restored RNG state.")
+
+
+# Optional model hooks of the training loop; the looped models implement them:
+#   after_forward(tok_loss, token_mask): after every training forward, before its backward.
+#   after_optimizer_step() -> dict: after every optimizer step; returns metrics to log with the step.
+#   step_train_tflops_per_token(seq_len) -> float: training TFLOPs per token of the step just run.
+#   training_state_dict() / load_training_state_dict(state): state saved with each checkpoint's
+#       training state, under "model_training_state".
+#   num_aux_loss_layers: number of MoE layer calls per forward, which normalizes the aux loss.
+
+
+def forward_backward_window(
+    model: torch.nn.Module,
+    batches: List[Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]],
+    cfg: TrainerConf,
+    state: State,
+) -> Tuple[List[torch.Tensor], Optional[List[torch.Tensor]]]:
+    """Forward and backward of one optimizer step's microbatches (gradient accumulation).
+
+    ``batches`` holds (x, y, mask) GPU tensors. Each microbatch backpropagates tok_loss.sum() / D, where D sums
+    the per-rank token denominators of the whole window, plus aux_loss / len(batches). Returns the detached
+    per-microbatch losses (over their own denominators) and MoE aux losses (None without aux loss).
+    """
+    denominators = []
+    for x, y, mask in batches:
+        if mask is None:
+            num_tokens = torch.tensor(y.numel(), dtype=torch.int64, device=y.device)
+        else:
+            num_tokens = mask.to(torch.int64).sum()
+        # reduce num tokens across data parallel ranks
+        torch.distributed.all_reduce(num_tokens, group=get_data_parallel_group())
+        denominators.append(num_tokens / (cfg.data_parallel_size * cfg.context_parallel_size))
+    window_denominator = denominators[0]
+    for denominator in denominators[1:]:
+        window_denominator = window_denominator + denominator
+
+    losses, aux_losses = [], []
+    for (x, y, mask), denominator in zip(batches, denominators):
+        tok_loss, aux_loss, _ = model(
+            tokens=x, targets=y, token_mask=mask, multi_segments=cfg.multi_segments,
+            moe_router_load_balancing_type=cfg.moe_router_load_balancing_type,
+            fp32_attn_output=cfg.fp32_attn_output, deterministic=cfg.deterministic
+        )
+        if hasattr(model, "after_forward"):
+            # Optional model hook on every rank, before loss scaling and backward.
+            model.after_forward(tok_loss, mask)
+        tok_loss_sum = tok_loss.sum()
+        train_loss = tok_loss_sum / (window_denominator + 1e-6).to(tok_loss)
+        # loss for logging, over this microbatch's own tokens
+        losses.append((tok_loss_sum / (denominator + 1e-6).to(tok_loss)).detach() / cfg.context_parallel_size)
+
+        if aux_loss is not None:
+            # Looped models run MoE layers repeatedly and report the executed count.
+            num_aux_loss = getattr(model, "num_aux_loss_layers", model.num_layers - model.num_dense_layers)
+            aux_loss = aux_loss / num_aux_loss
+            train_loss = train_loss + cfg.moe_aux_loss_coeff * aux_loss / len(batches)
+            aux_losses.append(aux_loss.detach())
+
+        if cfg.loss_rescaling:
+            train_loss = state.scale * train_loss
+
+        train_loss.backward()
+    return losses, (aux_losses if aux_losses else None)
 
 
 def get_optim_state(
@@ -155,7 +250,8 @@ def get_optim_state(
     scheduler,
     state: State,
     data_iterator: MultiSourceDataLoader,
-    timings: Timings
+    timings: Timings,
+    data_parallel_size: int,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     optim_state_dict = get_sharded_optimizer_state(model, optimizer, dcp)
     training_state_dict = {
@@ -164,20 +260,26 @@ def get_optim_state(
         "scale": state.scale,
         "scale_updates": state.scale_updates,
         "clip_cumulative": state.clip_cumulative,
+        "train_tflops": state.train_tflops,
         "data_state": data_iterator.get_state(),
         "timings": timings.to_dict(),
+        "rng_state": capture_rng_state(data_parallel_size),
     }
+    if hasattr(model, "training_state_dict"):
+        training_state_dict["model_training_state"] = model.training_state_dict()
     return optim_state_dict, training_state_dict
 
 
 def set_optim_state(
+    model,
     scheduler,
     reloaded_training_state_dict,
     state: State,
     data_iterator: MultiSourceDataLoader,
     timings: Timings,
     opt_cfg: OptimConf
-):
+) -> Optional[Dict[str, Any]]:
+    """Reload the training state; returns the saved RNG state, which the caller restores when requested."""
     # setting LR manually to support overwriting during training from the same state
     reloaded_training_state_dict["scheduler"]["base_lrs"] = [opt_cfg.lr]
     scheduler.load_state_dict(reloaded_training_state_dict["scheduler"])
@@ -188,13 +290,21 @@ def set_optim_state(
         reloaded_training_state_dict["clip_cumulative"],
     )
     timings.load_state_dict(reloaded_training_state_dict.get("timings", {}))  # ok if timings not here
-    data_iterator.set_state(reloaded_training_state_dict["data_state"])
+    state.train_tflops = reloaded_training_state_dict.get("train_tflops", 0.0)
+    if reloaded_training_state_dict["data_state"] is None:
+        # A checkpoint without data loader state restarts the data loader.
+        logger.warning("Training state has no data loader state; the data loader starts from the beginning.")
+    else:
+        data_iterator.set_state(reloaded_training_state_dict["data_state"])
+    if "model_training_state" in reloaded_training_state_dict:
+        model.load_training_state_dict(reloaded_training_state_dict["model_training_state"])
     logger.info(
         f"Reloaded training state. "
         f"Last step: {state.step} - Last scale: {state.scale} - Last clip_cumulative: {state.clip_cumulative}"
     )
     if scheduler._step_count - 1 != state.step:
         raise RuntimeError(f"Step mismatch: {scheduler._step_count - 1}/{state.step}")
+    return reloaded_training_state_dict.get("rng_state")
 
 
 def main(cfg: TrainerConf):
@@ -288,6 +398,7 @@ def main(cfg: TrainerConf):
     )
 
     # reload model if available
+    reloaded_rng_state = None
     if model_path is not None:
         logger.info(f"Reloading model checkpoint from {model_path} ...")
         hsdp_group = get_hybrid_shard_data_parallel_group()
@@ -313,7 +424,9 @@ def main(cfg: TrainerConf):
         assert training_state_path is not None
         logger.info(f"Reloading training state checkpoint from {training_state_path} ...")
         reloaded_training_state_dict = torch.load(training_state_path, map_location="cpu", weights_only=False)
-        set_optim_state(scheduler, reloaded_training_state_dict, state, data_iterator, timings, cfg.optim)
+        reloaded_rng_state = set_optim_state(
+            model, scheduler, reloaded_training_state_dict, state, data_iterator, timings, cfg.optim
+        )
     elif cfg.base_model_dir is not None:
         base_model_path, base_optim_path = get_base_model_checkpoint_path(
             cfg.base_model_dir, cfg.slurm.global_rank, cfg.fully_sharded_size, cfg.dcp_for_optimizer
@@ -356,8 +469,11 @@ def main(cfg: TrainerConf):
     )
     seed = cfg.seed + cfg.slurm.global_rank
     torch.cuda.manual_seed(seed)
+    if model_path is not None and cfg.restore_rng_state:
+        load_rng_state(reloaded_rng_state, cfg.data_parallel_size)
 
     # training starts
+    stop_step = cfg.steps if cfg.stop_step is None else cfg.stop_step
     logger.info(f"Training starts: batch size={cfg.global_batch_size} ({cfg.batch_size}) ...")
 
     timings.starting += timer() - t_start
@@ -371,55 +487,42 @@ def main(cfg: TrainerConf):
     gc.collect()
     torch.cuda.empty_cache()
 
-    while state.step < cfg.steps:
+    while state.step < stop_step:
         torch.cuda.reset_peak_memory_stats()
-        # data loading
+        # data loading: every microbatch of the accumulation window
         t1 = timer()
-        batch = next(batch_iterator)
-        x = torch.from_numpy(batch.x).cuda()
-        y = torch.from_numpy(batch.y).cuda()
-        mask = None if batch.mask is None else torch.from_numpy(batch.mask).cuda()
-        if cfg.dataloader.packing_type == "bestfit":
-            padding_ratios.append(batch.padding_ratio)
-            truncation_ratios.append(batch.truncation_ratio)
+        batches = []
+        for _ in range(cfg.gradient_accumulation_steps):
+            batch = next(batch_iterator)
+            x = torch.from_numpy(batch.x).cuda()
+            y = torch.from_numpy(batch.y).cuda()
+            mask = None if batch.mask is None else torch.from_numpy(batch.mask).cuda()
+            if cfg.dataloader.packing_type == "bestfit":
+                padding_ratios.append(batch.padding_ratio)
+                truncation_ratios.append(batch.truncation_ratio)
 
-        if cfg.sync_check_freq > 0 and state.step % cfg.sync_check_freq == 0:
-            logger.info("Checking batch randomness at step: {}, ...".format(state.step))
-            check_batch_for_sync({"x": x, "y": y, "mask": mask})
-            logger.info(f"Pass batch randomness checking.")
+            if cfg.sync_check_freq > 0 and state.step % cfg.sync_check_freq == 0:
+                logger.info("Checking batch randomness at step: {}, ...".format(state.step))
+                check_batch_for_sync({"x": x, "y": y, "mask": mask})
+                logger.info(f"Pass batch randomness checking.")
+
+            last_nw += y.nelement()
+            batches.append((x, y, mask))
 
         # fwd-bwd
         s_fwd_bwd = timer()
         timings.data_loading += s_fwd_bwd - t1
 
-        last_nw += y.nelement()
-
-        tok_loss, aux_loss, _ = model(
-            tokens=x, targets=y, token_mask=mask, multi_segments=cfg.multi_segments,
-            moe_router_load_balancing_type=cfg.moe_router_load_balancing_type,
-            fp32_attn_output=cfg.fp32_attn_output, deterministic=cfg.deterministic
-        )
-
-        if mask is None:
-            num_tokens = torch.tensor(tok_loss.numel(), dtype=torch.int64, device=tok_loss.device)
+        microbatch_losses, microbatch_aux_losses = forward_backward_window(model, batches, cfg, state)
+        del batches
+        # training TFLOPs per token of this step (models whose cost varies per step define the hook)
+        if hasattr(model, "step_train_tflops_per_token"):
+            step_tflops_per_token = model.step_train_tflops_per_token(cfg.seq_len)
         else:
-            num_tokens = mask.to(torch.int64).sum()
-        # reduce num tokens across data parallel ranks
-        torch.distributed.all_reduce(num_tokens, group=get_data_parallel_group())
-        num_tokens_per_rank = num_tokens / (cfg.data_parallel_size * cfg.context_parallel_size)
-        train_loss = tok_loss.sum() / (num_tokens_per_rank + 1e-6).to(tok_loss)
-        # calculate loss for logging
-        loss = train_loss.detach() / cfg.context_parallel_size
-
-        if aux_loss is not None:
-            num_aux_loss = model.num_layers - model.num_dense_layers
-            aux_loss = aux_loss / num_aux_loss
-            train_loss = train_loss + cfg.moe_aux_loss_coeff * aux_loss
-
-        if cfg.loss_rescaling:
-            train_loss = state.scale * train_loss
-
-        train_loss.backward()
+            step_tflops_per_token = tflops_per_token
+        # losses for logging: mean over the window's microbatches
+        loss = torch.stack(microbatch_losses).mean()
+        aux_loss = None if microbatch_aux_losses is None else torch.stack(microbatch_aux_losses).mean()
 
         # grad clip
         s_clip = timer()
@@ -454,6 +557,8 @@ def main(cfg: TrainerConf):
 
         # update step
         state.step += 1
+        step_train_tflops = step_tflops_per_token * cfg.global_batch_size * cfg.seq_len
+        state.train_tflops += step_train_tflops
 
         if grad_norm > clip_max_norm:
             state.clip_cumulative += 1
@@ -466,6 +571,8 @@ def main(cfg: TrainerConf):
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
+        # optional model hook once per completed optimizer step; its metrics are logged with the optim metrics
+        step_hook_metrics = model.after_optimizer_step() if hasattr(model, "after_optimizer_step") else {}
 
         # logging
         s_logging = timer()
@@ -497,7 +604,10 @@ def main(cfg: TrainerConf):
             "g_norm": grad_norm / state.scale,
             "clip_cumulative": state.clip_cumulative,
             "n_tokens": n_tokens,
+            "train_tflops": step_train_tflops,
+            "train_tflops_cumulative": state.train_tflops,
         })
+        optim_metrics.update(step_hook_metrics)
         if cfg.loss_rescaling:
             optim_metrics.update({
                 "scale": state.scale,
@@ -609,8 +719,8 @@ def main(cfg: TrainerConf):
         s_checkpointing = timer()
         timings.logging += s_checkpointing - s_logging
 
-        should_checkpoint = state.step % cfg.dump_freq == 0 or state.step == cfg.steps
-        should_eval = cfg.eval_freq > 0 and (state.step % cfg.eval_freq == 0 or state.step == cfg.steps)
+        should_checkpoint = state.step % cfg.dump_freq == 0 or state.step == stop_step
+        should_eval = cfg.eval_freq > 0 and (state.step % cfg.eval_freq == 0 or state.step == stop_step)
 
         if should_checkpoint:
             gc.collect()
@@ -618,7 +728,7 @@ def main(cfg: TrainerConf):
             sharded_model_state = get_model_state(model, full_state=False)
             # import pdb; pdb.set_trace()
             optim_state, training_state = get_optim_state(
-                model, optimizer, cfg.dcp_for_optimizer, scheduler, state, data_iterator, timings
+                model, optimizer, cfg.dcp_for_optimizer, scheduler, state, data_iterator, timings, cfg.data_parallel_size
             )
 
             checkpointer.save_latest_checkpoint(
@@ -652,7 +762,7 @@ def main(cfg: TrainerConf):
         timings.eval += timer() - s_eval
 
     # end of training
-    logger.info(f"Reached {cfg.steps} steps.")
+    logger.info(f"Reached {stop_step} steps.")
     data_iterator.close()
     checkpointer.close()
     for mlogger in mloggers.values():

@@ -86,6 +86,7 @@ class OptimConf(Config):
     epsilon: float = 1e-8
     beta1: float = 0.9
     beta2: float = 0.98
+    adamw_fused: Optional[bool] = None  # None uses PyTorch's default AdamW kernel; True selects the fused kernel
     clip: float = 1.0  # Global gradient L2 norm clipping threshold, before applying loss scale.
     scheduler: str = "cosine"  # LR scheduler: linear, cosine, constant, or wsd (warmup-stable-decay)
     lr_init_ratio: float = 1e-4  # The initial LR = lr_init_ratio * lr
@@ -176,6 +177,52 @@ class ModelConf(Config):
     scale_emb: bool = False  # Whether to scale embedding output by sqrt(model_dim).
     layerwise_ckpt: bool = False  # Whether to enable activation checkpointing for each layer to save memory by recomputing forward during backprop.
 
+    # Looped models (xllm/models/looped.py). For arch='transformer', layers [loop_start_layer, loop_end_layers)
+    # run loop_times times; for arch='huginn', loop_times is the number of recurrences and the recurrent span
+    # comes from the huginn_* layer counts, so loop_start_layer and loop_end_layers do not apply.
+    loop_times: int = 1
+    loop_start_layer: int = 0
+    loop_end_layers: Optional[int] = None  # None means num_layers
+    loop_input_injection: str = "none"  # none or diagonal; re-injects the embeddings at each loop entry
+    loop_diagonal_dt_init: float = 1.0
+    loop_diagonal_a_init: float = 1.0
+
+    # Input injection for the unrolled (loop_times 1) controls, dense or MoE: the output of
+    # dense_prelude_source_layer is injected before each of dense_prelude_input_layers.
+    dense_prelude_input_injection: str = "none"  # none or diagonal
+    dense_prelude_input_layers: str = ""  # Comma separated layer ids receiving the injection
+    dense_prelude_source_layer: int = -1  # Layer whose output is injected
+    dense_prelude_diagonal_dt_init: float = 1.0
+    dense_prelude_diagonal_a_init: float = 1.0
+
+    # Huginn (arch='huginn'): prelude, recurrent block and coda, with an optional H/L state split.
+    huginn_prelude_layers: int = 1
+    huginn_recurrent_layers: Optional[int] = None  # None means num_layers - prelude - coda
+    huginn_coda_layers: int = 1
+    huginn_state_init: str = "zero"  # zero, input or normal
+    huginn_input_injection: str = "diagonal"  # none or diagonal
+    huginn_diagonal_dt_init: float = 1.0
+    huginn_diagonal_a_init: float = 1.0
+    huginn_hierarchical_state: str = "none"  # none, shared_hl or split_hl
+    huginn_hierarchical_h_cycles: int = 2
+    huginn_hierarchical_l_cycles: int = 3
+    huginn_split_module_repeats: int = 1  # Repeats of each split H/L module per state update
+    huginn_depth_control: bool = False  # Use DepthControlledHuginn: the training depth and injection options below (dense, one state)
+    # Training depth (huginn_depth_control only): fixed loop_times, or capped Poisson-lognormal draws with mean loop_times.
+    huginn_sampling_scheme: str = "fixed"  # fixed or poisson-lognormal-capped
+    huginn_antithetic_sampling: bool = False  # Pair consecutive draws as u and 1 - u
+    huginn_poisson_lognormal_target_mean: float = 5.0
+    huginn_poisson_lognormal_sigma: float = 0.5
+    huginn_poisson_lognormal_max: int = 64
+    huginn_backprop_depth: Optional[int] = None  # Backpropagate through the last N recurrences; None means all
+    huginn_depth_prior: str = "none"  # none or learned: training depths come from a categorical prior trained by REINFORCE
+    huginn_depth_prior_entropy: float = 0.0  # Entropy coefficient lambda_H of the learned depth prior
+    # Input-injection variants (huginn_depth_control only).
+    huginn_prelude_norm: str = "none"  # none or rms: RMSNorm with weight on the injected prelude output (Parcae-Decay)
+    huginn_recurrent_exit_norm: str = "none"  # none or parameterless_rms: RMSNorm after every recurrence (Huginn-Linear)
+    huginn_prelude_orthogonal: bool = False  # OrthoInj: drop the decayed state's component along the injected update
+    huginn_ortho_projection_eps: float = 1e-6  # Added to the injected update's squared norm in that projection
+
     fused_block: bool = False  # Whether to use custom fused forward/backward implementations for training blocks; incompatible with layerwise_ckpt.
     # Recomputation switches
     recompute_q: bool = False  # Whether to recompute Q activations in fused block during backprop to save activation memory.
@@ -187,9 +234,10 @@ class ModelConf(Config):
     recompute_router: bool = False  # Whether to recompute router scores for MoE/MoVA in fused block.
 
     recompute_logits: bool = False  # Whether to recompute logits in output layer. Independent of fused_block. True = recompute logits and compute grad_X/grad_W during backward, False = precompute grad_X/grad_W during forward.
+    fused_output_layer: bool = True  # Fused norm/logits/cross-entropy in training. False computes them with separate modules, which is numerically different.
 
     def __post_init__(self):
-        assert self.arch in ['transformer', 'gekko']
+        assert self.arch in ['transformer', 'huginn', 'gekko']
         assert self.ddp_backend in ['fsdp1', 'fsdp2']
 
         assert self.causal_attn_backend in [None, "swift", "flash", 'xattn']
@@ -230,11 +278,96 @@ class ModelConf(Config):
         assert 0 <= self.attention_dropout < 1
         assert 0 <= self.hidden_dropout < 1
 
-        if self.arch == 'transformer':
+        if self.arch in ['transformer', 'huginn']:
             if self.fused_block:
                 assert self.causal_attn_backend is not None, 'requiring efficient attention when using fused block'
                 if self.qknorm:
                     assert self.recompute_v and self.recompute_q, "QK-norm w. fused block requires qkv re-computation."
+
+        assert self.loop_times >= 1
+        assert 0 <= self.loop_start_layer < self.num_layers
+        loop_end_layers = self.num_layers if self.loop_end_layers is None else self.loop_end_layers
+        assert self.loop_start_layer < loop_end_layers <= self.num_layers
+        assert self.loop_input_injection in ['none', 'diagonal']
+        assert self.loop_diagonal_dt_init > 0
+        assert self.loop_diagonal_a_init > 0
+
+        assert self.dense_prelude_input_injection in ['none', 'diagonal']
+        assert self.dense_prelude_diagonal_dt_init > 0
+        assert self.dense_prelude_diagonal_a_init > 0
+        dense_prelude_input_layers = [
+            int(layer) for layer in self.dense_prelude_input_layers.split(',') if layer.strip()
+        ]
+        if self.dense_prelude_input_injection == 'none':
+            assert not dense_prelude_input_layers
+            assert self.dense_prelude_source_layer < 0
+        else:
+            assert self.arch == 'transformer'
+            assert self.loop_input_injection == 'none'
+            assert self.loop_times == 1
+            assert dense_prelude_input_layers
+            assert 0 <= self.dense_prelude_source_layer < min(dense_prelude_input_layers)
+            assert all(layer < self.num_layers for layer in dense_prelude_input_layers)
+
+        if self.huginn_depth_control:
+            assert self.arch == 'huginn', "huginn_depth_control requires arch='huginn'."
+            assert self.num_experts == 0 and self.huginn_hierarchical_state == 'none', \
+                "DepthControlledHuginn is dense and has one recurrent state."
+        else:
+            depth_control_defaults = dict(
+                huginn_sampling_scheme='fixed', huginn_antithetic_sampling=False, huginn_backprop_depth=None,
+                huginn_depth_prior='none', huginn_depth_prior_entropy=0.0, huginn_prelude_norm='none',
+                huginn_recurrent_exit_norm='none', huginn_prelude_orthogonal=False,
+            )
+            changed = [name for name, default in depth_control_defaults.items() if getattr(self, name) != default]
+            assert not changed, f"{changed} require huginn_depth_control=True."
+        assert self.huginn_sampling_scheme in ['fixed', 'poisson-lognormal-capped']
+        assert self.huginn_backprop_depth is None or self.huginn_backprop_depth >= 1
+        if self.huginn_sampling_scheme == 'poisson-lognormal-capped':
+            # Evaluation runs loop_times recurrences, the mean of the training depth.
+            assert self.huginn_poisson_lognormal_target_mean == self.loop_times
+            assert 1 < self.loop_times < self.huginn_poisson_lognormal_max
+            assert self.huginn_poisson_lognormal_sigma > 0
+        else:
+            assert not self.huginn_antithetic_sampling, "antithetic draws require a sampled depth."
+        assert self.huginn_depth_prior in ['none', 'learned']
+        if self.huginn_depth_prior == 'learned':
+            # The prior starts from the capped PLN distribution over depths 1..64 and draws every depth itself.
+            assert self.huginn_sampling_scheme == 'poisson-lognormal-capped' and self.huginn_poisson_lognormal_max == 64
+            assert not self.huginn_antithetic_sampling
+            assert self.huginn_depth_prior_entropy >= 0
+        assert self.huginn_prelude_norm in ['none', 'rms']
+        assert self.huginn_recurrent_exit_norm in ['none', 'parameterless_rms']
+        if self.huginn_prelude_orthogonal:
+            assert self.huginn_input_injection == 'diagonal' and self.huginn_ortho_projection_eps > 0
+        assert self.huginn_split_module_repeats >= 1
+        if self.huginn_split_module_repeats != 1:
+            assert self.arch == 'huginn' and self.huginn_hierarchical_state == 'split_hl', (
+                "huginn_split_module_repeats > 1 is only valid for split H/L."
+            )
+
+        if self.arch == 'huginn':
+            assert self.loop_input_injection == 'none'
+            recurrent_layers = (
+                self.num_layers - self.huginn_prelude_layers - self.huginn_coda_layers
+                if self.huginn_recurrent_layers is None
+                else self.huginn_recurrent_layers
+            )
+            assert recurrent_layers > 0
+            assert self.huginn_prelude_layers + recurrent_layers + self.huginn_coda_layers == self.num_layers
+            assert self.huginn_state_init in ['zero', 'input', 'normal']
+            assert self.huginn_input_injection in ['none', 'diagonal'] + (['linear'] if self.huginn_depth_control else [])
+            assert self.huginn_diagonal_dt_init > 0
+            assert self.huginn_diagonal_a_init > 0
+            assert self.huginn_hierarchical_state in ['none', 'shared_hl', 'split_hl']
+            assert self.huginn_hierarchical_h_cycles >= 1
+            assert self.huginn_hierarchical_l_cycles >= 1
+            if self.huginn_hierarchical_state != 'none':
+                if self.huginn_hierarchical_state == 'split_hl':
+                    assert recurrent_layers % 2 == 0, "Split H/L state requires an even number of recurrent layers."
+                assert self.loop_times == self.huginn_hierarchical_h_cycles * (
+                    self.huginn_hierarchical_l_cycles + 1
+                )
 
 
 @dataclass
@@ -336,13 +469,15 @@ class TrainerConf(Config):
 
     # Training hyperparameters
     batch_size: Optional[int] = None  # Num of sequences per DP rank per step. Set either this or global_batch_size.
-    global_batch_size: Optional[int] = None  # Total batch size across DP ranks. Must be divisible by DP; batch_size is derived from this.
+    global_batch_size: Optional[int] = None  # Total batch size across DP ranks. Must be divisible by DP * gradient_accumulation_steps; batch_size is derived from this.
+    gradient_accumulation_steps: int = 1  # Microbatches per optimizer step; global_batch_size = DP * batch_size * gradient_accumulation_steps.
     seq_len: int = 8192  # Num of tokens in each sequence. Must be divisible by context_parallel_size * model.chunk_size.
     multi_segments: bool = True  # Whether to segment docs using BOS token. This will prevent attention across document boundaries.
     deterministic: bool = False  # Whether to request deterministic computations when supported.
     fp32_attn_output: bool = False # Whether to use high precision attention output (only supported in xattn backend).
 
     steps: int = 100000  # Total number of training steps.
+    stop_step: Optional[int] = None  # Stops training early at this step, with a checkpoint (and eval); the LR schedule still spans `steps`. None means `steps`.
     dtype: str = get_default_training_half()  # Training compute dtype: bf16 (default), fp16, or fp32.
     loss_rescaling: bool = False  # Whether to enable dynamic loss scaling and overflow handling. Required for fp16.
 
@@ -375,6 +510,7 @@ class TrainerConf(Config):
 
     # Random seed
     seed: int = 1
+    restore_rng_state: bool = False  # Whether resume restores the per-rank Python/NumPy/torch/CUDA RNG states saved in training states.
     nccl_timeout: int = 3600  # NCCL timeout in seconds.
 
     cluster_check_level: int = 1  # Cluster check level at start. 0 will only log env. >=1 will run communication benchmarks in addition.
@@ -414,6 +550,8 @@ class TrainerConf(Config):
         assert self.dtype in ["bf16", "fp16", "fp32"]
         if self.dtype == "fp16":
             assert self.loss_rescaling, "loss rescaling needed for fp16!"
+        assert not (self.loss_rescaling and self.model.huginn_depth_prior == 'learned'), \
+            "the learned depth prior must see every optimizer step, and loss rescaling skips steps on overflow."
 
         # MoE
         if self.model.num_experts > 0:
@@ -421,6 +559,8 @@ class TrainerConf(Config):
         if self.moe_router_load_balancing_type is not None:
             assert self.moe_router_load_balancing_type in ['dot', 'entropy']
             assert self.moe_aux_loss_coeff >= 0.0
+        assert self.gradient_accumulation_steps >= 1
+        assert self.stop_step is None or 0 < self.stop_step <= self.steps, f"{self.stop_step}/{self.steps}"
         # freq checks
         assert self.dump_freq % self.log_freq == 0
         assert self.eval_freq < 0 or (self.eval_freq % self.log_freq == 0)
@@ -438,7 +578,7 @@ class TrainerConf(Config):
         assert self.valid.seq_len % self.model.chunk_size == 0, f"{self.valid.seq_len}/{self.model.chunk_size}"
 
         assert self.model.num_heads % self.model_parallel_size == 0, f"{self.model.num_heads}/{self.model_parallel_size}"
-        if self.model.arch == 'transformer':
+        if self.model.arch in ['transformer', 'huginn']:
             assert self.model.layernorm_num_groups == 1 or self.model.layernorm_num_groups % self.model_parallel_size == 0, \
                 f"{self.model.layernorm_num_groups}/{self.model_parallel_size}"
         elif self.model.arch in ['gekko']:

@@ -1,0 +1,11 @@
+{
+  "data": "/absolute/path/to/source-01:0.0400:text:text,/absolute/path/to/source-02:0.0300:text:text",
+  "tokenizer": {"type": "huggingface", "path": "/absolute/path/to/artifact/tokenizer"},
+  "dataloader": {"buffer_size": 512, "packing_type": "bestfit", "skip_long_docs": true, "num_workers": 4},
+  "gradient_accumulation_steps": 1,
+  "log_freq": 1,
+  "dump_freq": 512,
+  "keep_n_last_checkpoints": 2,
+  "eval_freq": -1,
+  "log_wandb": false
+}

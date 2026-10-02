@@ -1,0 +1,23 @@
+xLLM Part II model artifacts
+Towards Looped Models Done Right, Part II: Rethinking at Fixed Points
+
+The model weights are distributed under the Apache License, Version 2.0.
+A copy is provided in LICENSE. The xLLM code has its own license in the
+repository root; third-party code retains its original notices.
+
+Tokenizer attribution
+
+The tokenizer is the one the models were trained with: a BPE tokenizer with a
+64,000-token vocabulary that the authors' team trained on a Jais-style data
+mix, which the paper calls Jais64k after Jais (Sengupta et al., 2023), with
+added chat and tool special tokens. It is distributed with the weights under
+the Apache License, Version 2.0, in tokenizer/: tokenizer.json,
+tokenizer_config.json and special_tokens_map.json are copied unchanged. A
+distilled student has no tokenizer/ and uses its teacher's.
+
+Artifact preparation:
+- The trained FP32 tensors are rounded to BF16 and stored in Safetensors
+  shards, keyed as the xLLM model's state dict.
+- config.json holds the release model config; for models with a tokenizer, its
+  tokenizer section points to tokenizer/, and for distilled students its student
+  section names the teacher artifact and its manifest SHA-256.

@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, List, Any
+from typing import Optional, Tuple, List, Any, Sequence
 import torch
 from torch import Tensor
 from torch import nn
@@ -519,6 +519,7 @@ class TransformerOutputLayer(nn.Module):
         self.layernorm_eps = cfg.layernorm_eps
         self.rmsnorm_eps = cfg.rmsnorm_eps
         self.recompute_logits = cfg.recompute_logits
+        self.fused_output_layer = cfg.fused_output_layer
 
         norm_cls = GroupRMSNorm if cfg.apply_rmsnorm else GroupLayerNorm
         norm_eps = cfg.rmsnorm_eps if self.apply_rmsnorm else cfg.layernorm_eps
@@ -547,7 +548,7 @@ class TransformerOutputLayer(nn.Module):
         y: Optional[Tensor],
         mask: Optional[Tensor] = None,
     ):
-        if self.training:
+        if self.fused_output_layer and self.training:
             assert y is not None
             fn = TransformerOutputLayerFunction
             return fn.apply(
@@ -785,7 +786,12 @@ class Transformer(XLLModel):
         total_params += self.model_dim * (1 if self.apply_rmsnorm else 2)
         return total_params, activated_params, embed_params
 
-    def tflops_per_token(self, seq_len: int):
+    def tflops_per_token(self, seq_len: int, layer_schedule: Optional[Sequence[int]] = None):
+        # `layer_schedule` lists executed layer ids; looped models run layers repeatedly.
+        if layer_schedule is None:
+            layer_schedule = list(range(self.num_layers))
+        num_layer_calls = len(layer_schedule)
+        num_dense_calls = sum(layer_id < self.num_dense_layers for layer_id in layer_schedule)
         expansion_factor = 6
         embed_flops = self.model_dim + self.vocab_size
         logits_flops = self.model_dim * self.vocab_size
@@ -826,9 +832,9 @@ class Transformer(XLLModel):
         moe_flops += self.model_dim * self.num_experts
 
         total_tflops = embed_flops + logits_flops + norm_flops
-        total_tflops += self.num_layers * (norm_flops + res_flops)
-        total_tflops += self.num_dense_layers * (attn_flops + ffn_flops)
-        total_tflops += (self.num_layers - self.num_dense_layers) * (moe_flops + (mova_flops if self.num_values > 0 else attn_flops))
+        total_tflops += num_layer_calls * (norm_flops + res_flops)
+        total_tflops += num_dense_calls * (attn_flops + ffn_flops)
+        total_tflops += (num_layer_calls - num_dense_calls) * (moe_flops + (mova_flops if self.num_values > 0 else attn_flops))
         total_tflops = total_tflops * expansion_factor / 10**12
         return total_tflops
 

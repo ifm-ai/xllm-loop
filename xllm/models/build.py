@@ -20,13 +20,25 @@ from xllm.utils import (
 from xllm.data.dataset_streamer.tokenizer import Tokenizer
 from xllm.models.xllm import XLLModel
 from xllm.models.gekko import Gekko
+from xllm.models.looped import Huginn, LoopedTransformer, DepthControlledHuginn
 from xllm.models.transformer import Transformer
 
 logger = getLogger()
 
 
 
-def get_model_cls(arch: str):
+def get_model_cls(arch: str, model_cfg: Optional[ModelConf] = None):
+    """Return the model class of `arch`; looped models need `model_cfg` to pick their class."""
+    if arch == "huginn":
+        if model_cfg is None:
+            raise ValueError("arch='huginn' needs model_cfg to pick the Huginn class")
+        return DepthControlledHuginn if model_cfg.huginn_depth_control else Huginn
+    if arch == "transformer" and model_cfg is not None and (
+        model_cfg.loop_times != 1
+        or model_cfg.loop_input_injection != "none"
+        or model_cfg.dense_prelude_input_injection != "none"
+    ):
+        return LoopedTransformer
     return {
         "transformer": Transformer,
         "gekko": Gekko,
@@ -96,7 +108,7 @@ def build_model_fsdp1(
         "device_mesh": device_mesh,
         "device_id": torch.cuda.current_device()
     }
-    model_cls = get_model_cls(model_cfg.arch)
+    model_cls = get_model_cls(model_cfg.arch, model_cfg)
     with create_on_gpu():
         with enable_wrap(wrapper_cls=FullyShardedDataParallel, **fsdp_cfg):
             model = model_cls(model_cfg, tokenizer)
@@ -140,7 +152,7 @@ def build_model_fsdp2(
         "reshard_after_forward": reshard_after_forward,
         "mp_policy": mixed_precision,
     }
-    model_cls = get_model_cls(model_cfg.arch)
+    model_cls = get_model_cls(model_cfg.arch, model_cfg)
     with create_on_gpu():
         with enable_wrap(**fsdp_cfg):
             model = model_cls(model_cfg, tokenizer)

@@ -1,197 +1,187 @@
 <div align="center">
 
-<h1>xLLM</h1>
+<h1>xLLM-Loop</h1>
 
-<p><strong>Efficient LLM training for extra-long contexts.</strong></p>
+<p><strong>Official code for <em>Towards Looped Models Done Right</em></strong></p>
 
 <p>
+  <a href="https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/"><img src="https://img.shields.io/badge/Paper-Part_I-B31B1B" alt="Part I paper"></a>
+  <a href="papers/part2.pdf"><img src="https://img.shields.io/badge/Paper-Part_II-B31B1B" alt="Part II paper (PDF)"></a>
   <a href="https://pytorch.org/get-started/locally/"><img src="https://img.shields.io/badge/PyTorch-2.11%2B-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.11+"></a>
   <img src="https://img.shields.io/badge/CUDA-12.8%2B-76B900?logo=nvidia&logoColor=white" alt="CUDA 12.8+">
+  <a href="https://huggingface.co/collections/IFM/towards-looped-models-done-right-6ab9f671bb1c97e33b27d14c"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-49-FFD21E" alt="49 checkpoints on Hugging Face"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache 2.0 License"></a>
 </p>
 
 <p>
+  <a href="#papers">Papers</a> &nbsp;|&nbsp;
   <a href="#highlights">Highlights</a> &nbsp;|&nbsp;
   <a href="#installation">Installation</a> &nbsp;|&nbsp;
   <a href="#quick-start">Quick Start</a> &nbsp;|&nbsp;
-  <a href="#documentation">Documentation</a> &nbsp;|&nbsp;
-  <a href="https://github.com/ifm-ai/xllm/issues">Issues</a>
+  <a href="#reproducing-the-papers">Reproducing the Papers</a> &nbsp;|&nbsp;
+  <a href="#checkpoints">Checkpoints</a> &nbsp;|&nbsp;
+  <a href="https://github.com/ifm-ai/xllm-loop/issues">Issues</a>
 </p>
 
 </div>
 
-xLLM is a PyTorch-based framework for long-context language modeling, with
-distributed training, online data preparation, evaluation, and model export
-in one repository.
+xLLM-Loop is the code release of our work on looped language models, which
+reuse a block of layers several times per token. It adds looped Transformer
+and Huginn architectures with depth-controlled training to the
+[xLLM](https://github.com/ifm-ai/xllm) training framework, together with the
+training, evaluation and checkpoint code of two papers.
+
+## Papers
+
+| Paper | Scope | Code | Guide |
+| --- | --- | --- | --- |
+| **Part I**: Topology, Input Injection, Recurrent-State Organization<br>[Blog post](https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/) · *(PDF and arXiv link to be added)* | 17 Dense and MoE recipes; 25 checkpoints | [xllm/paper_part1](xllm/paper_part1/) | [release/paper-part1](release/paper-part1/README.md) |
+| **Part II**: Rethinking at Fixed Points<br>[PDF](papers/part2.pdf) · *(arXiv link to be added)* | Depth priors, input-injection variants and distilled prefill; 24 checkpoints | [xllm/paper_part2](xllm/paper_part2/) | [release/paper-part2](release/paper-part2/README.md) |
 
 ## Highlights
 
-| Area                       | Capabilities                                                                                                                                                                                                                          |
-|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Model architectures**    | Transformer architectures, with dense, MoE, and MoVA components.                                                                                                                                                                      |
-| **Distributed training**   | FSDP1/FSDP2, data parallelism, model parallelism, and context parallelism.                                                                                                                                                            |
-| **Efficient computation**  | Custom CUDA kernels, fused blocks, recomputation, and FlashAttention backends. See the H200 benchmarks for [K2 Horizon](examples/benchmark_k2-horizon_h200_20260925.md) and [Llama 3 8B](examples/benchmark_llama3_h200_20260925.md). |
-| **Online data pipeline**   | Parallel tokenization, asynchronous preparation, buffered shuffle, and [bestfit packing](xllm/data/README.md#bestfit-packing).                                                                                                        |
-| **Training to deployment** | Checkpoint/resume, perplexity and task evaluation, Hugging Face export, and vLLM integration (via [xBridges](https://github.com/ifm-ai/xbridges)).                                                                                                                      |
+| Area | Capabilities |
+| --- | --- |
+| **Looped architectures** | `LoopedTransformer` iterates a range of layers; `Huginn` runs a prelude, a recurrent block and a coda, with a single or a hierarchical (H/L) recurrent state. See [looped.py](xllm/models/looped.py). |
+| **Depth-controlled training** | `DepthControlledHuginn` trains at a fixed, sampled (Poisson-lognormal) or learned depth with truncated backpropagation, and logs training FLOPs in expectation over the depths, or at the drawn depths with the learned prior. |
+| **Input injection** | Diagonal, linear and orthogonal input injection, with optional normalization of the injected input or the recurrent state. |
+| **Training loop** | Gradient accumulation, early stopping on an unchanged schedule (`stop_step`), and resume that can restore per-rank RNG states. |
+| **Paper protocols** | Recipe launchers, evaluators and data preparation scripts for the experiments of both papers. |
+| **Released checkpoints** | 49 checkpoints in native xLLM format on [Hugging Face](https://huggingface.co/collections/IFM/towards-looped-models-done-right-6ab9f671bb1c97e33b27d14c); the loaders verify every file against its manifest. |
 
 ## Installation
 
-Start with **PyTorch >= 2.11** and **CUDA >= 12.8**. Follow the
-[PyTorch installation guide](https://pytorch.org/get-started/locally/) for your
-environment before building xLLM.
+xLLM-Loop installs like xLLM. Start with **PyTorch >= 2.11** and
+**CUDA >= 12.8**; the release was checked with Python 3.12, PyTorch
+2.11.0+cu128 and FlashAttention 3.0.0. The papers' experiments ran on NVIDIA
+H200 GPUs.
 
-> Building the native extensions requires a CUDA development environment.
-> PyTorch must be installed before installing xLLM: `requirements.txt` does not
-> include `torch`, and `setup.py` imports it to build the extensions (hence
-> `--no-build-isolation`).
-
-### 1. Install xLLM
+### 1. Install xLLM-Loop
 
 ```bash
-git clone https://github.com/ifm-ai/xllm.git
-cd xllm
+git clone https://github.com/ifm-ai/xllm-loop.git
+cd xllm-loop
 
 python -m pip install -r requirements.txt
 python -m pip install -e . --no-build-isolation --config-settings editable_mode=compat
+python -m pip install "transformers[torch]" pyarrow
 ```
 
-### 2. Set Up Attention Backends
+### 2. Set Up FlashAttention 3
 
-Install FlashAttention for the Quick Start below:
+The paper code runs with FlashAttention 3. Follow the upstream
+[installation instructions](https://github.com/Dao-AILab/flash-attention/tree/main?tab=readme-ov-file#flashattention-3-beta-release),
+then select it for every command:
 
 ```bash
-python -m pip install flash-attn --no-build-isolation
+export ENABLE_FLASH_ATTENTION_3=true
 ```
 
-<details>
-<summary><strong>FlashAttention 3 or 4</strong></summary>
-
-Follow the upstream installation instructions for
-[FlashAttention 3](https://github.com/Dao-AILab/flash-attention/tree/main?tab=readme-ov-file#flashattention-3-beta-release)
-or [FlashAttention 4](https://github.com/Dao-AILab/flash-attention/tree/main/flash_attn/cute).
-Then select the installed backend before launching training:
-
-```bash
-# FlashAttention 3
-export ENABLE_FLASH_ATTENTION_3=TRUE
-
-# Alternatively, use FlashAttention 4 instead:
-# export ENABLE_FLASH_ATTENTION_4=TRUE
-```
-
-</details>
-
-<details>
-<summary><strong>xattn: efficient attention modules</strong></summary>
-
-Install [xattn](https://github.com/ifm-ai/xattn) from source.
-
-```bash
-git clone https://github.com/ifm-ai/xattn.git
-cd xattn
-
-git submodule update --init --recursive
-python -m pip install -r requirements-build.txt
-python -m pip install --no-build-isolation .
-```
-
-</details>
-
-<details>
-<summary><strong>Flash Linear Attention: modules and operators</strong></summary>
-
-Install [Flash Linear Attention](https://github.com/fla-org/flash-linear-attention)
-for models using its modules or operators:
-
-```bash
-python -m pip install flash-linear-attention
-```
-
-</details>
-
-### 3. Add Tokenizer Support
-
-For Hugging Face tokenizers (required for the Quick Start below):
-
-```bash
-python -m pip install "transformers[torch]"
-```
+The [xLLM installation guide](https://github.com/ifm-ai/xllm#installation)
+covers the native extensions and the other attention backends.
 
 ## Quick Start
 
-Start a short, single-GPU training run with the K2 Horizon 0.9B configuration.
-Replace the paths below with a directory containing `*.chunk*.jsonl` text data
-and a Hugging Face tokenizer with BOS/EOS tokens. See the
-[data format examples](xllm/data/README.md#data-format).
+Download a released checkpoint and generate from it:
 
 ```bash
-DATA_DIR=/path/to/text-data
-TOKENIZER=/path/to/tokenizer
-
-torchrun --standalone --nproc_per_node=1 train.py \
-  --model k2-horizon-0.9B \
-  --model.causal_attn_backend flash --model.chunk_size 1024 \
-  --data "${DATA_DIR}:1.0:text:text" \
-  --tokenizer.type huggingface --tokenizer.path "$TOKENIZER" \
-  --dataloader.packing_type bestfit --dataloader.buffer_size 512 \
-  --batch_size 1 --seq_len 2048 --dtype bf16 \
-  --steps 100 --optim.warmup 10 \
-  --log_freq 10 --dump_freq 100 --eval_freq -1 \
-  --keep_eval_checkpoints false \
-  --dump_dir saved_models/quickstart
+hf download IFM/LoopedLM-P1-dense-huginn-336b --local-dir checkpoints/dense-huginn-336b
 ```
 
-`batch_size` is per data-parallel rank. Alternatively, set `global_batch_size`,
-divisible by the data-parallel size; do not set both. Use a fresh `dump_dir` for
-a new run; an existing checkpoint in that directory is resumed automatically.
+```python
+from xllm.paper_part1.native_inference import generate_native, load_native_model
 
-When changing these values, keep the constraints checked in
-[`xllm/config.py`](xllm/config.py):
+model, tokenizer, config = load_native_model("checkpoints/dense-huginn-336b")
+tokens = generate_native(model, tokenizer, ["The capital of France is"],
+                         max_gen_len=32, use_sampling=False)
+print(tokenizer.decode(tokens[0]))
+```
 
-- `seq_len` must be divisible by `model.chunk_size` (times
-  `context_parallel_size` when using context parallelism). The default
-  `chunk_size` is 2048; the Quick Start uses 1024 so that `seq_len` 2048 splits
-  into two chunks.
-- `dump_freq` must be divisible by `log_freq`, and a positive `eval_freq` must be
-  divisible by `log_freq`.
-- With `keep_eval_checkpoints true` (the default), a positive `eval_freq` must
-  also be divisible by `dump_freq`.
+Preview the full training config of a paper recipe. Copy
+[common-base.example.json](release/paper-part1/common-base.example.json) to
+`base.json` and fill in the data and tokenizer paths first:
 
-## Checkpoint Conversion & Serving
-Conversion and serving checkpoints of xLLM is supported by [xBridges](https://github.com/ifm-ai/xbridges).
+```bash
+python train_paper_part1.py --recipe dense_huginn --target 336b \
+  --base-config base.json --dump-dir runs/dense-huginn --print-config
+```
 
-## Documentation
+## Reproducing the Papers
 
 | I want to... | Start here |
 | --- | --- |
-| **Prepare training data** | [Data loader](xllm/data/README.md): JSONL formats, online tokenization, packing, and resume. |
-| **Configure and launch training** | [Experiment scripts](examples/) and [configuration](xllm/config.py); entry point: [train.py](train.py). |
-| **Evaluate a model** | [Evaluation guide](xllm/eval/README.md); entry point: [eval.py](eval.py). |
-| **Export to Hugging Face** | [Checkpoint conversion](https://github.com/ifm-ai/xbridges/blob/main/xbridges/huggingface/README.md). |
-| **Serve with vLLM** | [vLLM integration](https://github.com/ifm-ai/xbridges/blob/main/xbridges/vllm/README.md). |
+| **Train a Part I recipe** | [Part I guide](release/paper-part1/README.md#train); entry point: [train_paper_part1.py](train_paper_part1.py). |
+| **Export a trained Part I checkpoint for evaluation** | [Part I guide](release/paper-part1/README.md#export-a-trained-checkpoint); entry point: [export_paper_part1.py](export_paper_part1.py). |
+| **Evaluate a Part I checkpoint** | [Part I guide](release/paper-part1/README.md#evaluate); entry point: [eval_paper_part1.py](eval_paper_part1.py). |
+| **Train a Part II recipe** | [Part II guide](release/paper-part2/README.md#train); entry point: [train_paper_part2.py](train_paper_part2.py). |
+| **Export a trained Part II checkpoint for evaluation or distillation** | [Part II guide](release/paper-part2/README.md#train); entry point: [export_paper_part2.py](export_paper_part2.py). |
+| **Distill a Part II prefill student** | [Part II guide](release/paper-part2/README.md#distilled-prefill); entry point: [distill_paper_part2.py](distill_paper_part2.py). |
+| **Evaluate a Part II checkpoint** | [Part II guide](release/paper-part2/README.md#evaluate); entry point: [eval_paper_part2.py](eval_paper_part2.py). |
+| **Prepare the data** | Part I [training](release/paper-part1/data.md) and [evaluation](release/paper-part1/eval-data.md) data; Part II [training](release/paper-part2/data.md) and [evaluation](release/paper-part2/eval-data.md) data. |
+
+## Checkpoints
+
+All 49 checkpoints are in the Hugging Face collection
+[Towards Looped Models Done Right](https://huggingface.co/collections/IFM/towards-looped-models-done-right-6ab9f671bb1c97e33b27d14c).
+They use the native xLLM format and load with this code, not with Hugging Face
+Transformers.
+
+| Paper | Repositories | Contents |
+| --- | --- | --- |
+| Part I | `IFM/LoopedLM-P1-<recipe>-<336b\|500b>` | 25 checkpoints of the 17 recipes; [list](release/paper-part1/README.md#checkpoints) |
+| Part II | `IFM/LoopedLM-P2-<name>` | 24 checkpoints: depth priors, injection variants, D4 and distilled students; [list](release/paper-part2/README.md#artifacts) |
 
 ## Repository Layout
 
+xLLM-Loop adds these paths to xLLM:
+
 ```text
-xllm/
-  configuration/  Config dataclass and command-line parsing
-  csrc/           Custom C++/CUDA kernels
-  data/           Online data loading, tokenization, packing, and resume
-  models/         Model architectures and fused blocks
-  modules/        Attention, expert layers, normalization, and operators
-  distributed/    Parallelism and distributed training utilities
-  optim/          Optimizers and learning-rate schedulers
-  eval/           Evaluation tasks and runnersxllm_bridges/     Hugging Face conversion and vLLM integration
-examples/         Training launch scripts and benchmarks
-tests/            Tests and validation utilities
+xllm/models/
+  looped.py              Looped Transformer, Huginn and DepthControlledHuginn
+  looped_depth.py        Recurrent-depth distributions and draws
+  looped_depth_prior.py  Learned depth prior
+  looped_flops.py        Training FLOPs of DepthControlledHuginn
+xllm/paper_part1/        Part I recipes, training, inference, checkpoints and evaluation
+xllm/paper_part2/        Part II recipes, training, distillation, checkpoints and evaluation
+release/                 Reproduction guides, data preparation and weight licenses
+papers/                  Paper PDFs
+train_paper_part1.py     Part I entry points (with eval_paper_part1.py, export_paper_part1.py)
+train_paper_part2.py     Part II entry points (with eval_paper_part2.py, distill_paper_part2.py,
+                         export_paper_part2.py)
 ```
 
-## Contributing
+## Built on xLLM
 
-Bug reports and focused pull requests are welcome. For runtime issues, include
-the relevant configuration, package versions, hardware, and a minimal reproducer.
-Include tests for behavior changes.
+The rest of the repository is [xLLM](https://github.com/ifm-ai/xllm): data
+loading, configuration, distributed training, evaluation and checkpointing.
+The [xLLM README](https://github.com/ifm-ai/xllm#readme) covers its general
+usage, including data preparation, training configuration, evaluation and
+checkpoint conversion. xLLM-Loop's additions to the shared training loop are
+opt-in: xLLM models train as they do in xLLM, and checkpoints additionally
+record per-rank RNG states.
+
+## Citation
+
+```bibtex
+@misc{huang2026loopedmodels,
+  title  = {Towards Looped Models Done Right. Part I: Topology, Input Injection, Recurrent-State Organization},
+  author = {Benhao Huang and Chufan Shi and Junlin Chen and Shicheng Wen and Zhengzhong Liu and Eric Xing and Xuezhe Ma},
+  year   = {2026},
+  url    = {https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/}
+}
+
+@misc{huang2026fixedpoints,
+  title  = {Towards Looped Models Done Right. Part II: Rethinking at Fixed Points},
+  author = {Benhao Huang and Chufan Shi and Junlin Chen and Shicheng Wen and Zhengzhong Liu and Eric Xing and Xuezhe Ma},
+  year   = {2026},
+  url    = {https://github.com/ifm-ai/xllm-loop/blob/main/papers/part2.pdf}
+}
+```
 
 ## License
 
-xLLM is released under the [Apache 2.0 License](LICENSE).
+xLLM-Loop is released under the [Apache 2.0 License](LICENSE). Third-party code
+in the evaluation modules is listed with its licenses in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The released weights carry
+their own licenses: [Part I](release/paper-part1/LICENSE.weights) and
+[Part II](release/paper-part2/LICENSE.weights).

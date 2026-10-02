@@ -1,8 +1,9 @@
 """
 Distributed data-loader smoke test.
 
-Launch with torchrun (2 ranks):
-    torchrun --nproc_per_node=2 tests/data/test_data_loader.py
+Launch with torchrun (2 ranks), a data mix (DATA or DATA_FILE) and a tokenizer:
+    DATA=/path/to/source:1.0:text:text TOKENIZER_PATH=/path/to/tokenizer \
+        torchrun --nproc_per_node=2 tests/data/test_data_loader.py
 
 What this test checks
 ---------------------
@@ -32,26 +33,14 @@ from xllm.data.dataset_streamer.tokenizer.build import build_tokenizer
 from xllm.data.dataloader import MultiSourceDataLoader
 
 # ── constants ────────────────────────────────────────────────────────────────
-DATA_ROOT = "/mnt/weka/shrd/k2m/linghao.jin/xllm_fully_shuffled"
-DEFAULT_DATA_MIX = (
-    f"{DATA_ROOT}/math:0.301:text:text,"
-    f"{DATA_ROOT}/other:0.2496:text:text,"
-    f"{DATA_ROOT}/web-stackedu:0.1548:text:text,"
-    f"{DATA_ROOT}/arabic_new:0.05:text:text,"
-    f"{DATA_ROOT}/txt360-qa:0.0797:text:text,"
-    f"{DATA_ROOT}/opencoder:0.1649:text:text"
-)
 if "DATA" in os.environ:
     DATA_MIX = os.environ["DATA"]
 elif "DATA_FILE" in os.environ:
     with open(os.environ["DATA_FILE"], "r", encoding="utf-8") as f:
         DATA_MIX = f.read().strip()
 else:
-    DATA_MIX = DEFAULT_DATA_MIX
-TOKENIZER_PATH = os.environ.get(
-    "TOKENIZER_PATH",
-    "/mnt/weka/shrd/k2m/xuezhe.ma/data/tokenizers/jais64k_enx10_codex6.5_arax5_3digits",
-)
+    DATA_MIX = None
+TOKENIZER_PATH = os.environ.get("TOKENIZER_PATH")
 
 SEQ_LEN      = int(os.environ.get("SEQ_LEN", "2048"))
 BATCH_SIZE   = int(os.environ.get("BATCH_SIZE", "2"))          # sequences per step
@@ -268,6 +257,9 @@ def test_num_workers_determinism(tokenizer, rank: int, world_size: int):
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    if DATA_MIX is None or TOKENIZER_PATH is None:
+        sys.exit("Set DATA (or DATA_FILE) to a data mix and TOKENIZER_PATH to a tokenizer.")
+
     # ── init dist ────────────────────────────────────────────────────────────
     backend = os.environ.get("DIST_BACKEND", "nccl" if torch.cuda.is_available() else "gloo")
     dist.init_process_group(backend=backend)

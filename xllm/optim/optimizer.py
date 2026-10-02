@@ -29,6 +29,7 @@ def build_optimizer(model: nn.Module, cfg: OptimConf, total_steps: int, param_dt
         betas=(cfg.beta1, cfg.beta2),
         weight_decay=cfg.weight_decay,
         eps=cfg.epsilon,
+        fused=cfg.adamw_fused,
     )
 
     # scheduler

@@ -1,0 +1,25 @@
+xLLM Part I model artifacts
+
+The model weights are distributed under the Apache License, Version 2.0.
+A copy is provided in LICENSE. The xLLM code has its own license in the
+repository root; third-party code retains its original notices.
+
+Tokenizer attribution
+
+The tokenizer is derived from IFM/K2-Horizon-3.7B and retains its upstream
+Apache-2.0 license.
+Source revision: 86a26d7bf092484faa047121d5816f037d4a8ffa
+https://huggingface.co/IFM/K2-Horizon-3.7B/tree/86a26d7bf092484faa047121d5816f037d4a8ffa
+
+Part I modifications:
+- tokenizer.json retains the final ByteLevel post-processor from the source
+  Sequence, removing automatic begin-of-text insertion.
+- special_tokens_map.json stores each token object's content as a string.
+- tokenizer_config.json is copied unchanged.
+The vocabulary, token IDs, merges and added-token attributes are unchanged.
+
+Artifact preparation:
+- Source model tensors are converted to BF16 and stored in Safetensors shards.
+- config.json holds the checkpoint's values of the model fields its recipe
+  sets and the tokenizer settings; tokenizer.path points to this artifact's
+  tokenizer directory.

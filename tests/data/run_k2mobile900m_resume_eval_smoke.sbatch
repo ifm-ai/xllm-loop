@@ -5,15 +5,16 @@
 #SBATCH --cpus-per-task=12
 #SBATCH --gpus-per-node=1
 #SBATCH --open-mode=append
-#SBATCH --output=/lustrefs/users/chufan.shi/codex_space/compare_runs/logs/%x-%j.out
-#SBATCH --error=/lustrefs/users/chufan.shi/codex_space/compare_runs/logs/%x-%j.err
 #SBATCH --partition=main
 #SBATCH --time=01:00:00
 #SBATCH --mem=128G
 
 set -euo pipefail
 
-# Run both phases with the same unique tag, then compare:
+# Activate the xLLM environment and set the site paths, then run both phases
+# with the same unique tag and compare:
+#   export REPO=/path/to/xllm SAVE_ROOT=/path/to/runs TOKENIZER=/path/to/tokenizer \
+#     DATA=/path/to/source:1.0:text:text VALID_DATA=/path/to/valid.jsonl TASK_ROOT=/path/to/eval-tasks
 #   PHASE=baseline RUN_TAG=my-test sbatch --export=ALL,PHASE,RUN_TAG "$0"
 #   PHASE=resume RUN_TAG=my-test sbatch --export=ALL,PHASE,RUN_TAG "$0"
 #   python tests/data/compare_train_resume.py \
@@ -30,8 +31,12 @@ if [[ -z "${RUN_TAG}" ]]; then
   exit 2
 fi
 
-REPO="${REPO:-/lustrefs/users/chufan.shi/codex_space/xllm}"
-SAVE_ROOT="${SAVE_ROOT:-/lustrefs/users/chufan.shi/codex_space/compare_runs/checkpoints}"
+REPO="${REPO:?Set REPO to the xLLM checkout}"
+SAVE_ROOT="${SAVE_ROOT:?Set SAVE_ROOT to the directory for run outputs}"
+DATA="${DATA:?Set DATA to the training data mix (path:weight:text:text,...)}"
+TOKENIZER="${TOKENIZER:?Set TOKENIZER to a Hugging Face tokenizer directory}"
+VALID_DATA="${VALID_DATA:?Set VALID_DATA to a validation JSONL file}"
+TASK_ROOT="${TASK_ROOT:?Set TASK_ROOT to the evaluation task root (with copa)}"
 RUN_ROOT="${SAVE_ROOT}/k2mobile900m_resume_eval_${RUN_TAG}"
 BASELINE_SAVE="${RUN_ROOT}/baseline"
 RESUME_SAVE="${RUN_ROOT}/resume"
@@ -73,9 +78,6 @@ fi
 mkdir -p "${SAVE}/restarts"
 cp "$0" "${SAVE}/run_${PHASE}.sbatch"
 
-source /lustrefs/users/xuezhe.ma/miniconda3/etc/profile.d/conda.sh
-conda activate /lustrefs/users/xuezhe.ma/miniconda3/envs/xllm2.9.1
-
 export NCCL_DEBUG=WARN
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
 export ENABLE_FLASH_ATTENTION_3=True
@@ -87,12 +89,6 @@ export XLLM_LOG_DATA_SOURCES_MAX_SEQS=0
 export XLLM_LOG_DATA_SOURCES_DIR="${SAVE}/data_source_logs"
 unset XLLM_LOG_DATALOADER_TIMING
 unset XLLM_DATALOADER_TIMING_DIR
-
-DATA_ROOT="/lustrefs/shared/initial-dataset/stripped/xllm_merged"
-DATA="${DATA_ROOT}/chunked-data_opencoder:0.5:text:text,${DATA_ROOT}/shaurya_math_oss_dataset_filtered_clean:0.5:text:text"
-TOKENIZER="/lustrefs/users/xuezhe.ma/projects/data/tokenizers/jais64k_enx10_codex6.5_arax5_3digits"
-VALID_DATA="/lustrefs/shared/initial-dataset/pretrain_xllm/SlimPajama-627B/validation/Slimpajama.jsonl"
-TASK_ROOT="/lustrefs/users/xuezhe.ma/projects/data/eval"
 
 cd "${REPO}"
 echo "PHASE=${PHASE} RUN_TAG=${RUN_TAG} SAVE=${SAVE}"
