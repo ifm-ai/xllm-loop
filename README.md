@@ -136,18 +136,26 @@ Transformers.
 xLLM-Loop adds these paths to xLLM:
 
 ```text
-xllm/models/
-  looped.py              Looped Transformer, Huginn and DepthControlledHuginn
-  looped_depth.py        Recurrent-depth distributions and draws
-  looped_depth_prior.py  Learned depth prior
-  looped_flops.py        Training FLOPs of DepthControlledHuginn
-xllm/paper_part1/        Part I recipes, training, inference, checkpoints and evaluation
-xllm/paper_part2/        Part II recipes, training, distillation, checkpoints and evaluation
-release/                 Reproduction guides, data preparation and weight licenses
-papers/                  Paper PDFs
-train_paper_part1.py     Part I entry points (with eval_paper_part1.py, export_paper_part1.py)
-train_paper_part2.py     Part II entry points (with eval_paper_part2.py, distill_paper_part2.py,
-                         export_paper_part2.py)
+xllm-loop/
+├── xllm/
+│   ├── models/
+│   │   ├── looped.py              # Looped Transformer and Huginn models
+│   │   ├── looped_depth.py        # Recurrent-depth distributions
+│   │   ├── looped_depth_prior.py  # Learned depth prior
+│   │   └── looped_flops.py        # Training FLOPs
+│   ├── paper_part1/               # Part I recipes, training, evaluation
+│   └── paper_part2/               # Part II recipes, training, evaluation
+├── release/
+│   ├── paper-part1/               # Part I guide and weight license
+│   └── paper-part2/               # Part II guide and weight license
+├── papers/                        # Paper PDFs
+├── train_paper_part1.py           # Part I: train
+├── export_paper_part1.py          # Part I: export a checkpoint
+├── eval_paper_part1.py            # Part I: evaluate
+├── train_paper_part2.py           # Part II: train
+├── export_paper_part2.py          # Part II: export a checkpoint
+├── eval_paper_part2.py            # Part II: evaluate
+└── distill_paper_part2.py         # Part II: distill a prefill student
 ```
 
 ## Built on xLLM
