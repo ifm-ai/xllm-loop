@@ -1,6 +1,6 @@
 # Part II: Rethinking at Fixed Points
 
-Paper: *Towards Looped Models Done Right, Part II: Rethinking at Fixed Points* ([PDF](../../papers/part2.pdf)).
+Paper: *Towards Looped Models Done Right, Part II: Rethinking at Fixed Points* ([arXiv](https://arxiv.org/abs/2610.06833), [PDF](../../papers/part2.pdf)).
 
 This directory provides the code, recipes and evaluation protocol behind the
 main-text experiments of the paper: the depth priors of Table 2, the

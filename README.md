@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/"><img src="https://img.shields.io/badge/Paper-Part_I-B31B1B" alt="Part I paper"></a>
-  <a href="papers/part2.pdf"><img src="https://img.shields.io/badge/Paper-Part_II-B31B1B" alt="Part II paper (PDF)"></a>
+  <a href="https://arxiv.org/abs/2610.06833"><img src="https://img.shields.io/badge/Paper-Part_II-B31B1B" alt="Part II paper (arXiv)"></a>
   <a href="https://pytorch.org/get-started/locally/"><img src="https://img.shields.io/badge/PyTorch-2.11%2B-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.11+"></a>
   <img src="https://img.shields.io/badge/CUDA-12.8%2B-76B900?logo=nvidia&logoColor=white" alt="CUDA 12.8+">
   <a href="https://huggingface.co/collections/IFM/towards-looped-models-done-right-6ab9f671bb1c97e33b27d14c"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Checkpoints-49-FFD21E" alt="49 checkpoints on Hugging Face"></a>
@@ -36,7 +36,7 @@ training, evaluation and checkpoint code of two papers.
 | Paper | Scope | Code | Guide |
 | --- | --- | --- | --- |
 | **Part I**: Topology, Input Injection, Recurrent-State Organization<br>[Blog post](https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/) · *(PDF and arXiv link to be added)* | 17 Dense and MoE recipes; 25 checkpoints | [xllm/paper_part1](xllm/paper_part1/) | [release/paper-part1](release/paper-part1/README.md) |
-| **Part II**: Rethinking at Fixed Points<br>[PDF](papers/part2.pdf) · *(arXiv link to be added)* | Depth priors, input-injection variants and distilled prefill; 24 checkpoints | [xllm/paper_part2](xllm/paper_part2/) | [release/paper-part2](release/paper-part2/README.md) |
+| **Part II**: Rethinking at Fixed Points<br>[arXiv](https://arxiv.org/abs/2610.06833) · [PDF](papers/part2.pdf) | Depth priors, input-injection variants and distilled prefill; 24 checkpoints | [xllm/paper_part2](xllm/paper_part2/) | [release/paper-part2](release/paper-part2/README.md) |
 
 ## Highlights
 
@@ -178,11 +178,11 @@ record per-rank RNG states.
   url    = {https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/}
 }
 
-@misc{huang2026fixedpoints,
-  title  = {Towards Looped Models Done Right. Part II: Rethinking at Fixed Points},
-  author = {Benhao Huang and Chufan Shi and Junlin Chen and Shicheng Wen and Zhengzhong Liu and Eric Xing and Xuezhe Ma},
-  year   = {2026},
-  url    = {https://github.com/ifm-ai/xllm-loop/blob/main/papers/part2.pdf}
+@article{huang2026fixedpoints,
+  title   = {Towards Looped Models Done Right, Part II: Rethinking at Fixed Points},
+  author  = {Benhao Huang and Chufan Shi and Junlin Chen and Shicheng Wen and Zhengzhong Liu and Eric Xing and Xuezhe Ma},
+  journal = {arXiv preprint arXiv:2610.06833},
+  year    = {2026}
 }
 ```
 
