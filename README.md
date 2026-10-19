@@ -5,7 +5,7 @@
 <p><strong>Official code for <em>Towards Looped Models Done Right</em></strong></p>
 
 <p>
-  <a href="https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/"><img src="https://img.shields.io/badge/Paper-Part_I-B31B1B" alt="Part I paper"></a>
+  <a href="https://arxiv.org/abs/2610.23036"><img src="https://img.shields.io/badge/Paper-Part_I-B31B1B" alt="Part I paper"></a>
   <a href="https://arxiv.org/abs/2610.06833"><img src="https://img.shields.io/badge/Paper-Part_II-B31B1B" alt="Part II paper (arXiv)"></a>
   <a href="https://pytorch.org/get-started/locally/"><img src="https://img.shields.io/badge/PyTorch-2.11%2B-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch 2.11+"></a>
   <img src="https://img.shields.io/badge/CUDA-12.8%2B-76B900?logo=nvidia&logoColor=white" alt="CUDA 12.8+">
@@ -35,8 +35,8 @@ training, evaluation and checkpoint code of two papers.
 
 | Paper | Scope | Code | Guide |
 | --- | --- | --- | --- |
-| **Part I**: Topology, Input Injection, Recurrent-State Organization<br>[Blog post](https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/) · *(PDF and arXiv link to be added)* | 17 Dense and MoE recipes; 25 checkpoints | [xllm/paper_part1](xllm/paper_part1/) | [release/paper-part1](release/paper-part1/README.md) |
-| **Part II**: Rethinking at Fixed Points<br>[arXiv](https://arxiv.org/abs/2610.06833) · [PDF](papers/part2.pdf) | Depth priors, input-injection variants and distilled prefill; 24 checkpoints | [xllm/paper_part2](xllm/paper_part2/) | [release/paper-part2](release/paper-part2/README.md) |
+| **Part I**: Topology, Input Injection, Recurrent-State Organization<br>[Blog post](https://huskydoge.github.io/husky-blog/posts/recursive_models/towards-looped-models-done-right/) · [arXiv](https://arxiv.org/abs/2610.23036) | 17 Dense and MoE recipes; 25 checkpoints | [xllm/paper_part1](xllm/paper_part1/) | [release/paper-part1](release/paper-part1/README.md) |
+| **Part II**: Rethinking at Fixed Points<br>[arXiv](https://arxiv.org/abs/2610.06833)  | Depth priors, input-injection variants and distilled prefill; 24 checkpoints | [xllm/paper_part2](xllm/paper_part2/) | [release/paper-part2](release/paper-part2/README.md) |
 
 ## Highlights
 
