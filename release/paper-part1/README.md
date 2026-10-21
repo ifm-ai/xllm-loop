@@ -4,8 +4,9 @@ Paper: *Towards Looped Models Done Right, Part I: Topology, Input Injection, Rec
 
 This directory has the code and instructions for the Part I experiments: the
 seventeen Dense and MoE recipes, native inference with the released checkpoints
-and the paper evaluation protocol. Some training data sources are not public
-(see the [data guide](data.md)). Every command below runs from the repository
+and the paper evaluation protocol. Four of the 42 training data sources
+(`opencoder`, `arabic-shuffled`, `french` and `hindi`) are not public; the
+[data guide](data.md) links the rest. Every command below runs from the repository
 root.
 
 ## Environment

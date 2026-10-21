@@ -4,11 +4,13 @@
 
 Every Table 2, Table 3 and D4 recipe trains on the same weighted mixture as the
 xLLM Part I release: the 42 sources below, in this order and with these weights,
-tokenized with the Jais64k tokenizer instead of Part I's. Source names without a
-link identify prepared components of the mixture. The public TxT360 components
-are `IFM/TxT360-v2` at revision `63d6dbf4d469058a8c7868909be18a5ada487be1`
-(`txt360-qa`) and `IFM/TxT360-3efforts` at revision
-`bfc4a082d11967cd7810fe0b773be87bf54fb32e` (`3efforts-pretrain`), both CC-BY-4.0.
+tokenized with the Jais64k tokenizer instead of Part I's. IFM publishes 24 of
+the sources in the form the paper trained on, as subsets of its K2 Horizon
+datasets; the table links each subset at its pinned revision, and the
+[Part I data guide](../paper-part1/data.md) lists the revisions and converts a
+subset's Parquet shards into the loader's chunk files. Four sources,
+`opencoder`, `arabic-shuffled`, `french` and `hindi` (12.1% of the weight),
+cannot be made public at present.
 
 Set the base config's `data` field to comma-separated
 `/path/to/source:weight:text:text` entries, one per source, in the listed order
@@ -21,48 +23,48 @@ paper's.
 
 | Source | Weight | Public source |
 | --- | ---: | --- |
-| `nltk-web-high-randomized` | 0.0400 |  |
-| `nemotron-cc-high` | 0.0300 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2) |
-| `nemotron-cc-high-synthetic` | 0.0500 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2) |
-| `web-high-medium` | 0.0430 |  |
-| `nemotron-cc-high-medium` | 0.0200 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2) |
-| `nemotron-cc-high-medium-synthetic` | 0.0300 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2.1) |
-| `nemotron-cc-2025` | 0.0300 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2.1) |
-| `nemotron-cc-diverse-qa` | 0.0300 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2) |
-| `txt360-qa` | 0.0300 | [Source](https://huggingface.co/datasets/IFM/TxT360-v2/tree/63d6dbf4d469058a8c7868909be18a5ada487be1) |
-| `opencoder` | 0.0800 | [Source](https://huggingface.co/collections/OpenCoder-LLM/opencoder-datasets-672e6db6a0fed24bd69ef1c2) |
-| `nemotron-pretraining-code` | 0.0300 | [Source 1](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-Code-v1), [Source 2](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-Code-v2) |
-| `nemotron-cc-code` | 0.0190 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-Code-v1) |
-| `stack-edu` | 0.0050 | [Source](https://huggingface.co/datasets/HuggingFaceTB/stack-edu) |
-| `code_solutions_no_reasoning_8k` | 0.0350 |  |
-| `code_solutions_no_reasoning_8k-hard` | 0.0270 |  |
-| `code_solutions_with_reasoning_16k` | 0.0185 |  |
-| `code_solutions_with_reasoning_16k-hard` | 0.0115 |  |
-| `code_thinking-cleaned` | 0.0200 |  |
-| `code_prompts_all_knobs_8k` | 0.0050 |  |
-| `nemotron-cc-math` | 0.0120 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-Math-v1) |
-| `math-qwen-no-think` | 0.0400 |  |
-| `math-oss-cleaned` | 0.0500 |  |
-| `math-rewrite` | 0.0260 |  |
-| `math-dialogue` | 0.0100 |  |
-| `agentic-math-dialogue-cleaned` | 0.0050 |  |
-| `nemotron-sft-no-think` | 0.0175 | [Source 1](https://huggingface.co/datasets/nvidia/Nemotron-Post-Training-Dataset-v1), [Source 2](https://huggingface.co/datasets/nvidia/Llama-Nemotron-Post-Training-Dataset) |
-| `instruction_following-cleaned` | 0.0040 |  |
-| `nemotron-pretraining-sft` | 0.0220 | [Source 1](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-SFT-v1), [Source 2](https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-Specialized-v1) |
-| `3efforts-pretrain` | 0.0050 | [Source](https://huggingface.co/datasets/IFM/TxT360-3efforts/tree/bfc4a082d11967cd7810fe0b773be87bf54fb32e) |
-| `reasoning` | 0.0525 |  |
-| `general` | 0.0300 |  |
-| `planning` | 0.0410 |  |
-| `ai` | 0.0155 |  |
-| `games-8k` | 0.0070 |  |
-| `other` | 0.0180 |  |
-| `hq-rewrite` | 0.0200 |  |
-| `codeio` | 0.0015 | [Source](https://huggingface.co/datasets/hkust-nlp/CodeIO-PyEdu-Reasoning) |
-| `arabic-shuffled` | 0.0220 |  |
-| `french` | 0.0150 |  |
-| `hindi` | 0.0040 |  |
-| `diverse-qa-multilingual` | 0.0140 | [Source](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2) |
-| `other-multilingual` | 0.0140 | [Source](https://huggingface.co/datasets/HuggingFaceFW/fineweb-2) |
+| `nltk-web-high-randomized` | 0.0400 | [IFM/TxT360-v2 `web-high-nltk-qa`](https://huggingface.co/datasets/IFM/TxT360-v2/tree/63d6dbf4d469058a8c7868909be18a5ada487be1/web-high-nltk-qa) |
+| `nemotron-cc-high` | 0.0300 | [nvidia/Nemotron-CC-v2 `High-Quality`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/High-Quality) |
+| `nemotron-cc-high-synthetic` | 0.0500 | [nvidia/Nemotron-CC-v2 `High-Quality-Synthetic`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/High-Quality-Synthetic) |
+| `web-high-medium` | 0.0430 | [IFM/TxT360-v2 `web-high-medium`](https://huggingface.co/datasets/IFM/TxT360-v2/tree/63d6dbf4d469058a8c7868909be18a5ada487be1/web-high-medium) |
+| `nemotron-cc-high-medium` | 0.0200 | [nvidia/Nemotron-CC-v2 `Medium-High-Quality`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/Medium-High-Quality) |
+| `nemotron-cc-high-medium-synthetic` | 0.0300 | [nvidia/Nemotron-CC-v2.1 `Medium-High-Quality-Synthetic`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2.1/tree/ba6f2aaef7ada865bb08fc08640ca292150097db/Medium-High-Quality-Synthetic) |
+| `nemotron-cc-2025` | 0.0300 | [nvidia/Nemotron-CC-v2.1](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2.1/tree/ba6f2aaef7ada865bb08fc08640ca292150097db), seven subsets ([upstream sources](../paper-part1/data.md#upstream-sources)) |
+| `nemotron-cc-diverse-qa` | 0.0300 | [nvidia/Nemotron-CC-v2 `Diverse-QA`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/Diverse-QA) |
+| `txt360-qa` | 0.0300 | [IFM/TxT360-v2 `txt360-qa`](https://huggingface.co/datasets/IFM/TxT360-v2/tree/63d6dbf4d469058a8c7868909be18a5ada487be1/txt360-qa) |
+| `opencoder` | 0.0800 | Not public |
+| `nemotron-pretraining-code` | 0.0300 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
+| `nemotron-cc-code` | 0.0190 | [nvidia/Nemotron-CC-Code-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Code-v1/tree/5c5bebce9f9a85c237d63b2afad516ee532f950f) |
+| `stack-edu` | 0.0050 | [HuggingFaceTB/stack-edu](https://huggingface.co/datasets/HuggingFaceTB/stack-edu/tree/eeec5caac5cc3758a18f1d3ba4416837a9ba814c), file contents from Software Heritage ([upstream sources](../paper-part1/data.md#upstream-sources)) |
+| `code_solutions_no_reasoning_8k` | 0.0350 | [IFM/Code-Reasoning `code-no-thinking`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-no-thinking) |
+| `code_solutions_no_reasoning_8k-hard` | 0.0270 | [IFM/Code-Reasoning `code-no-thinking-hard`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-no-thinking-hard) |
+| `code_solutions_with_reasoning_16k` | 0.0185 | [IFM/Code-Reasoning `code-thinking-v1`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-thinking-v1) |
+| `code_solutions_with_reasoning_16k-hard` | 0.0115 | [IFM/Code-Reasoning `code-thinking-hard`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-thinking-hard) |
+| `code_thinking-cleaned` | 0.0200 | [IFM/Code-Reasoning `code-thinking-v0`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-thinking-v0) |
+| `code_prompts_all_knobs_8k` | 0.0050 | [IFM/Code-Reasoning `code-task-synthesis`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/code-task-synthesis) |
+| `nemotron-cc-math` | 0.0120 | [nvidia/Nemotron-CC-Math-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Math-v1/tree/397a2502f2028c659ba411a6c4935b464a7f03aa) `3` and `4plus` |
+| `math-qwen-no-think` | 0.0400 | [IFM/Math-Reasoning `math-thinking-qwen`](https://huggingface.co/datasets/IFM/Math-Reasoning/tree/e249295774c3a66943e1483dbf53e0c811bc41dd/math-thinking-qwen) |
+| `math-oss-cleaned` | 0.0500 | [IFM/Math-Reasoning `math-thinking-oss`](https://huggingface.co/datasets/IFM/Math-Reasoning/tree/e249295774c3a66943e1483dbf53e0c811bc41dd/math-thinking-oss) |
+| `math-rewrite` | 0.0260 | [IFM/Math-Reasoning `math-rewrite`](https://huggingface.co/datasets/IFM/Math-Reasoning/tree/e249295774c3a66943e1483dbf53e0c811bc41dd/math-rewrite) |
+| `math-dialogue` | 0.0100 | [IFM/Math-Reasoning `math-dialogue`](https://huggingface.co/datasets/IFM/Math-Reasoning/tree/e249295774c3a66943e1483dbf53e0c811bc41dd/math-dialogue) |
+| `agentic-math-dialogue-cleaned` | 0.0050 | [IFM/Math-Reasoning `socratic-math-dialogue`](https://huggingface.co/datasets/IFM/Math-Reasoning/tree/e249295774c3a66943e1483dbf53e0c811bc41dd/socratic-math-dialogue) |
+| `nemotron-sft-no-think` | 0.0175 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
+| `instruction_following-cleaned` | 0.0040 | [IFM/SFT-Reasoning `instruction-following`](https://huggingface.co/datasets/IFM/SFT-Reasoning/tree/4d4dbbe65e478a2ca179c4cce43b5e1f051aacd2/instruction-following) |
+| `nemotron-pretraining-sft` | 0.0220 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
+| `3efforts-pretrain` | 0.0050 | [IFM/SFT-Reasoning `3efforts-pretrain`](https://huggingface.co/datasets/IFM/SFT-Reasoning/tree/4d4dbbe65e478a2ca179c4cce43b5e1f051aacd2/3efforts-pretrain) |
+| `reasoning` | 0.0525 | [IFM/Pretrain-Behaviors `reasoning`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/reasoning) |
+| `general` | 0.0300 | [IFM/Pretrain-Behaviors `general`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/general) |
+| `planning` | 0.0410 | [IFM/Pretrain-Behaviors `planning`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/planning) |
+| `ai` | 0.0155 | [IFM/Pretrain-Behaviors `data-science`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/data-science) |
+| `games-8k` | 0.0070 | [IFM/Pretrain-Behaviors `games`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/games) |
+| `other` | 0.0180 | [IFM/Pretrain-Behaviors `other`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/other) |
+| `hq-rewrite` | 0.0200 | [IFM/Pretrain-Behaviors `format-rewrites`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/format-rewrites) |
+| `codeio` | 0.0015 | [IFM/Code-Reasoning `codeio`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/codeio) |
+| `arabic-shuffled` | 0.0220 | Not public |
+| `french` | 0.0150 | Not public |
+| `hindi` | 0.0040 | Not public |
+| `diverse-qa-multilingual` | 0.0140 | [nvidia/Nemotron-CC-v2 `Translated-Diverse-QA`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/Translated-Diverse-QA), ten languages ([upstream sources](../paper-part1/data.md#upstream-sources)) |
+| `other-multilingual` | 0.0140 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
 
 ## Tokenizer
 
