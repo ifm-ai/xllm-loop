@@ -4,11 +4,13 @@ Paper: *Towards Looped Models Done Right, Part I: Topology, Input Injection, Rec
 
 This directory has the code and instructions for the Part I experiments: the
 seventeen Dense and MoE recipes, native inference with the released checkpoints
-and the paper evaluation protocol. The training data is public except
-for the Arabic, French and Hindi web text and one GitHub code corpus (four of
-the 42 sources), which are not public yet; the [data guide](data.md) links the
-rest. Every command below runs from the repository
-root.
+and the paper evaluation protocol. A rerun differs from the paper's runs in two
+ways. Four of the 42 training data sources, the Arabic, French and Hindi web
+text and one GitHub code corpus, are not public yet; the [data guide](data.md)
+links the rest. And the paper's runs used an earlier version of the xLLM data
+loader, while this code uses the current one, so a rerun's absolute numbers can
+differ somewhat from the paper's; comparisons between models should still hold.
+Every command below runs from the repository root.
 
 ## Environment
 

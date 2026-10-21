@@ -6,11 +6,13 @@ This directory provides the code, recipes and evaluation protocol behind the
 main-text experiments of the paper: the depth priors of Table 2, the
 input-injection variants of Table 3, and the distilled prefill of Table 4 with
 its D4 baseline, together with the 24 checkpoints ([Artifacts](#artifacts)).
-The Arabic, French and Hindi web text and one GitHub code corpus in the training
-mixture (four of its 42 sources; see the [data guide](data.md)) are not public
-yet, and the upstream loader packs sequences differently from the paper's runs,
-so retraining follows the recipes on the data you supply. Every command below
-runs from the repository root.
+A rerun differs from the paper's runs in two ways. Four of the 42 training data
+sources, the Arabic, French and Hindi web text and one GitHub code corpus, are
+not public yet; the [data guide](data.md) links the rest. And the paper's runs
+used an earlier version of the xLLM data loader, while this code uses the
+current one, so a rerun's absolute numbers can differ somewhat from the paper's;
+comparisons between models should still hold. Every command below runs from the
+repository root.
 
 ## Environment
 
