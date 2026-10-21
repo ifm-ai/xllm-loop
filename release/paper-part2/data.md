@@ -8,9 +8,9 @@ tokenized with the Jais64k tokenizer instead of Part I's. IFM publishes 24 of
 the sources in the form the paper trained on, as subsets of its K2 Horizon
 datasets; the table links each subset at its pinned revision, and the
 [Part I data guide](../paper-part1/data.md) lists the revisions and converts a
-subset's Parquet shards into the loader's chunk files. Four sources,
-`opencoder`, `arabic-shuffled`, `french` and `hindi` (12.1% of the weight),
-cannot be made public at present.
+subset's Parquet shards into the loader's chunk files. The Arabic, French and
+Hindi web text (`arabic-shuffled`, `french` and `hindi`) and the GitHub code
+corpus `opencoder`, together 12.1% of the weight, are not public yet.
 
 Set the base config's `data` field to comma-separated
 `/path/to/source:weight:text:text` entries, one per source, in the listed order
@@ -32,7 +32,7 @@ paper's.
 | `nemotron-cc-2025` | 0.0300 | [nvidia/Nemotron-CC-v2.1](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2.1/tree/ba6f2aaef7ada865bb08fc08640ca292150097db), seven subsets ([upstream sources](../paper-part1/data.md#upstream-sources)) |
 | `nemotron-cc-diverse-qa` | 0.0300 | [nvidia/Nemotron-CC-v2 `Diverse-QA`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/Diverse-QA) |
 | `txt360-qa` | 0.0300 | [IFM/TxT360-v2 `txt360-qa`](https://huggingface.co/datasets/IFM/TxT360-v2/tree/63d6dbf4d469058a8c7868909be18a5ada487be1/txt360-qa) |
-| `opencoder` | 0.0800 | Not public |
+| `opencoder` | 0.0800 | Not public yet |
 | `nemotron-pretraining-code` | 0.0300 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
 | `nemotron-cc-code` | 0.0190 | [nvidia/Nemotron-CC-Code-v1](https://huggingface.co/datasets/nvidia/Nemotron-CC-Code-v1/tree/5c5bebce9f9a85c237d63b2afad516ee532f950f) |
 | `stack-edu` | 0.0050 | [HuggingFaceTB/stack-edu](https://huggingface.co/datasets/HuggingFaceTB/stack-edu/tree/eeec5caac5cc3758a18f1d3ba4416837a9ba814c), file contents from Software Heritage ([upstream sources](../paper-part1/data.md#upstream-sources)) |
@@ -60,9 +60,9 @@ paper's.
 | `other` | 0.0180 | [IFM/Pretrain-Behaviors `other`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/other) |
 | `hq-rewrite` | 0.0200 | [IFM/Pretrain-Behaviors `format-rewrites`](https://huggingface.co/datasets/IFM/Pretrain-Behaviors/tree/3345e13d7f3f6d0ecb5fdd67b37aed289f3191f5/format-rewrites) |
 | `codeio` | 0.0015 | [IFM/Code-Reasoning `codeio`](https://huggingface.co/datasets/IFM/Code-Reasoning/tree/e971bd7801485b24bb217dcde9d46f4bad42ea00/codeio) |
-| `arabic-shuffled` | 0.0220 | Not public |
-| `french` | 0.0150 | Not public |
-| `hindi` | 0.0040 | Not public |
+| `arabic-shuffled` | 0.0220 | Not public yet |
+| `french` | 0.0150 | Not public yet |
+| `hindi` | 0.0040 | Not public yet |
 | `diverse-qa-multilingual` | 0.0140 | [nvidia/Nemotron-CC-v2 `Translated-Diverse-QA`](https://huggingface.co/datasets/nvidia/Nemotron-CC-v2/tree/2669787c66d18601c0e91167fd520be6c1245865/Translated-Diverse-QA), ten languages ([upstream sources](../paper-part1/data.md#upstream-sources)) |
 | `other-multilingual` | 0.0140 | [Upstream sources](../paper-part1/data.md#upstream-sources) |
 

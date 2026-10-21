@@ -6,10 +6,11 @@ This directory provides the code, recipes and evaluation protocol behind the
 main-text experiments of the paper: the depth priors of Table 2, the
 input-injection variants of Table 3, and the distilled prefill of Table 4 with
 its D4 baseline, together with the 24 checkpoints ([Artifacts](#artifacts)).
-Four of the 42 mixture sources (`opencoder`, `arabic-shuffled`, `french` and `hindi`; see the
-[data guide](data.md)) and the paper's distillation token cache are not public,
-and the upstream loader packs sequences differently from the paper's runs, so
-retraining follows the recipes on the data you supply. Every command below runs from the repository root.
+The Arabic, French and Hindi web text and one GitHub code corpus in the training
+mixture (four of its 42 sources; see the [data guide](data.md)) and the paper's
+distillation token cache are not public yet, and the upstream loader packs
+sequences differently from the paper's runs, so retraining follows the recipes
+on the data you supply. Every command below runs from the repository root.
 
 ## Environment
 
